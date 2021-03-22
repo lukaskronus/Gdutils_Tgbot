@@ -1,24 +1,26 @@
-// How many milliseconds for a single request to time out（Reference value，If continuous timeout, it will be adjusted to twice the previous time）
+// 单次请求多少毫秒未响应以后超时（基准值，若连续超时则下次调整为上次的2倍）
 const TIMEOUT_BASE = 7000
-// Maximum timeout setting，For example, for a certain request, the first 7s timeout, the second 14s, the third 28s, the fourth 56s, the fifth is not 112s but 60
+// 最大超时设置，比如某次请求，第一次7s超时，第二次14s，第三次28s，第四次56s，第五次不是112s而是60s，后续同理
 const TIMEOUT_MAX = 60000
 
-const LOG_DELAY = 5000 //  Log output interval, in milliseconds
-const PAGE_SIZE = 1000 // Each network request to read the number of files in the directory, the larger the value, the more likely it will time out, and it should not exceed 1000
+const LOG_DELAY = 5000 // 日志输出时间间隔，单位毫秒
+const PAGE_SIZE = 1000 // 每次网络请求读取目录下的文件数，数值越大，越有可能超时，不得超过1000
 
-const RETRY_LIMIT = 7 // The maximum number of retries allowed, If a request fails
-const PARALLEL_LIMIT = 20 // The number of parallel network requests can be adjusted according to the network environment
+const RETRY_LIMIT = 5 // 如果某次请求失败，允许其重试的最大次数
+const PARALLEL_LIMIT = 10 // 网络请求的并行数量，可根据网络环境调整
 
-const DEFAULT_TARGET = '' // Required. Copy the default destination ID. If target is not specified, it will be copied here. It is recommended to fill in the team drive ID
+const DEFAULT_TARGET = '0AIoODpByOoxiUk9PVA' // 必填，拷贝默认目的地ID，如果不指定target，则会复制到此处，建议填写团队盘ID
 
-const AUTH = { // If you have the json authorization file of the service account, you can copy it to the sa directory instead of client_id/secret/refrest_token
+const AUTH = { // 如果您拥有service account的json授权文件，可将其拷贝至 sa 目录中以代替 client_id/secret/refrest_token
   client_id: '96050509400-qu7ppub8f268bf984cov6tdhr9rkeuqu.apps.googleusercontent.com',
   client_secret: 'WRwta2waBSBPKm5XgQZtxR5o',
   refresh_token: '1//0eLjc42J9POmACgYIARAAGA4SNwF-L9IrUvAu0o_IXpcSQvZfrsFLYkIGF87IHpuJN-Jz7tyriL4yi9aRLsk5URG8b79YuEzG3Lo',
-  expires: 0, // Can be left blank
-  access_token: 'ya29.a0AfH6SMAjCr81vZ3kMPN-hxdJYuL2CYapw0Hr5aeq7zQAPd7qrnx0fhQqMijh49a3GeaEosGDVBcgn-HjLYXgVLPWQVN0PJDBn6REOtnnARHBZigrviMRu-Sa13zNZ9j_prnDAPW2qWJDsZUuHmOk9_hEIDli', // Can be left blank
-  tg_token: '1638287632:AAEKHILID4iRaAXg6Ar906EC2XYxoElQw_g', // Your telegram bot token，Go here https://core.telegram.org/bots#6-botfather
-  tg_whitelist: ['Akikiiro'] // Your tg username(t.me/username)，The bot will only execute commands sent by users in this list
-}
+  expires: 0, // 可以留空
+  access_token: '', // 可以留空
+  tg_token: '1638287632:AAEKHILID4iRaAXg6Ar906EC2XYxoElQw_g', // 你的 telegram robot 的 token，获取方法参见 https://core.telegram.org/bots#6-botfather
+  tg_whitelist: ['Akikiiro'], // 你的tg username(t.me/username)，bot只会执行这个列表里的用户所发送的指令
+  adminUsers:[1085523376] //admin users' telegram id, should be numbers
+  }
 
-module.exports = { AUTH, PARALLEL_LIMIT, RETRY_LIMIT, TIMEOUT_BASE, TIMEOUT_MAX, LOG_DELAY, PAGE_SIZE, DEFAULT_TARGET }
+  module.exports = { AUTH, PARALLEL_LIMIT, RETRY_LIMIT, TIMEOUT_BASE, TIMEOUT_MAX, LOG_DELAY, PAGE_SIZE, DEFAULT_TARGET};
+

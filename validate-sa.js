@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { argv } = require('yargs')
-  .usage('Usage: ./$0 folder-id\nfolder-id Does SA has read Pemission to the directory ID you want to detect')
+  .usage('用法: ./$0 folder-id\nfolder-id 是你想检测SA是否对其有阅读权限的目录ID')
   .help('h')
   .alias('h', 'help')
 
@@ -28,18 +28,18 @@ main()
 async function main () {
   const [fid] = argv._
   if (validate_fid(fid)) {
-    console.log('Start testing', SA_TOKENS.length, 'SA accounts')
+    console.log('开始检测', SA_TOKENS.length, '个SA帐号')
     const invalid_sa = await get_invalid_sa(SA_TOKENS, fid)
-    if (!invalid_sa.length) return console.log('Detected', SA_TOKENS.length, 'Individual SA，No invalid account detected')
+    if (!invalid_sa.length) return console.log('已检测', SA_TOKENS.length, '个SA，未检测到无效帐号')
     const choice = await choose(invalid_sa.length)
     if (choice === 'yes') {
       mv_sa(invalid_sa)
-      console.log('Successfully moved')
+      console.log('成功移动')
     } else {
-      console.log('Successful exit, invalid SA record：', invalid_sa)
+      console.log('成功退出，无效的SA记录：', invalid_sa)
     }
   } else {
-    console.warn('Folder ID is missing or malformed')
+    console.warn('目录ID缺失或格式错误')
   }
 }
 
@@ -55,10 +55,10 @@ async function choose (count) {
   const answer = await prompts({
     type: 'select',
     name: 'value',
-    message: `Detcted ${count} Invalid SA，Whether to move them to the sa/invalid Folder？`,
+    message: `检测到 ${count} 个无效的SA，是否将它们移动到 sa/invalid 目录下？`,
     choices: [
-      { title: 'Yes', description: 'Confirm Move', value: 'yes' },
-      { title: 'No', description: 'Exit without making changes', value: 'no' }
+      { title: 'Yes', description: '确认移动', value: 'yes' },
+      { title: 'No', description: '不做更改，直接退出', value: 'no' }
     ],
     initial: 0
   })
@@ -66,13 +66,13 @@ async function choose (count) {
 }
 
 async function get_invalid_sa (arr, fid) {
-  if (!fid) throw new Error('Please specify the ID of the directory to check permissions')
+  if (!fid) throw new Error('请指定要检测权限的目录ID')
   const fails = []
   let flag = 0
   let good = 0
   for (const v of arr) {
-    console.log('Inspection Progress', `${flag++}/${arr.length}`)
-    console.log('Normal/Abnormal', `${good}/${fails.length}`)
+    console.log('检测进度', `${flag++}/${arr.length}`)
+    console.log('正常/异常', `${good}/${fails.length}`)
     const {gtoken, filename} = v 
     try {
       const access_token = await get_sa_token(gtoken)
@@ -81,11 +81,11 @@ async function get_invalid_sa (arr, fid) {
     } catch (e) {
       handle_error(e)
       const status = e && e.response && e.response.status
-      if (Number(status) === 400) fails.push(filename) // access_token Failed
+      if (Number(status) === 400) fails.push(filename) // access_token 获取失败
 
       const data = e && e.response && e.response.data
       const code = data && data.error && data.error.code
-      if ([404, 403].includes(Number(code))) fails.push(filename) // Failed to read folder information
+      if ([404, 403].includes(Number(code))) fails.push(filename) // 读取文件夹信息失败
     }
   }
   return fails
