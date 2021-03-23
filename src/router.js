@@ -11,12 +11,20 @@ const COPYING_FIDS = {}
 const counting = {}
 const router = new Router()
 
+function is_pm2 () {
+  return 'PM2_HOME' in process.env || 'PM2_JSON_PROCESSING' in process.env || 'PM2_CLI' in process.env
+}
+
+function is_int (n) {
+  return n === parseInt(n)
+}
+
 router.get('/api/gdurl/count', async ctx => {
-  if (!ROUTER_PASSKEY) return ctx.body = 'gd-utils 成功启动'
+  if (!ROUTER_PASSKEY) return ctx.body = 'gd-utils Successfully started'
   const { query, headers } = ctx.request
   let { fid, type, update, passkey } = query
   if (passkey !== ROUTER_PASSKEY) return ctx.body = 'invalid passkey'
-  if (!validate_fid(fid)) throw new Error('无效的分享ID')
+  if (!validate_fid(fid)) throw new Error('Invalid FolderID')
 
   let ua = headers['user-agent'] || ''
   ua = ua.toLowerCase()
@@ -41,10 +49,10 @@ router.get('/api/gdurl/count', async ctx => {
 
 router.post('/api/gdurl/tgbot', async ctx => {
   const { body } = ctx.request
-  console.log('ctx.ip', ctx.ip) // 可以只允许tg服务器的ip
+  console.log('ctx.ip', ctx.ip) // You can only allow the ip of the tg server
   console.log('tg message:', JSON.stringify(body, null, '  '))
   if (TG_IPLIST && !TG_IPLIST.includes(ctx.ip)) return ctx.body = 'invalid ip'
-  ctx.body = '' // 早点释放连接
+  ctx.body = '' // Release the connection early
   const message = body.message || body.edited_message
   const message_str = JSON.stringify(message)
 
@@ -54,24 +62,27 @@ router.post('/api/gdurl/tgbot', async ctx => {
     const chat_id = callback_query.from.id
     const [action, fid, target] = data.split(' ').filter(v => v)
     if (action === 'count') {
-      if (counting[fid]) return sm({ chat_id, text: fid + ' 正在统计，请稍等片刻' })
+      if (counting[fid]) return sm({ chat_id, text: fid + ' Counting, please wait a moment' })
       counting[fid] = true
       send_count({ fid, chat_id }).catch(err => {
         console.error(err)
-        sm({ chat_id, text: fid + ' 统计失败：' + err.message })
+        sm({ chat_id, text: fid + ' Stats Failed：' + err.message })
       }).finally(() => {
         delete counting[fid]
       })
     } else if (action === 'copy') {
-      if (COPYING_FIDS[fid]) return sm({ chat_id, text: `正在处理 ${fid} 的复制命令` })
-      COPYING_FIDS[fid] = true
+      if (COPYING_FIDS[fid + target]) return sm({ chat_id, text: 'Processing copy command with the same source and destination' })
+      COPYING_FIDS[fid + target] = true
       tg_copy({ fid, target: get_target_by_alias(target), chat_id }).then(task_id => {
-        task_id && sm({ chat_id, text: `开始复制，任务ID: ${task_id} 可输入 /task ${task_id} 查询进度` })
-      }).finally(() => COPYING_FIDS[fid] = false)
+        is_int(task_id) && sm({ chat_id, text: `Clone Started For Task ID: ${task_id}\nType /task ${task_id} to check the progress` })
+      }).finally(() => COPYING_FIDS[fid + target] = false)
     } else if (action === 'update') {
-      if (counting[fid]) return sm({ chat_id, text: fid + ' 正在统计，请稍等片刻' })
+      if (counting[fid]) return sm({ chat_id, text: fid + ' Counting, please wait a moment' })
       counting[fid] = true
-      send_count({ fid, chat_id, update: true }).finally(() => {
+      send_count({ fid, chat_id, update: true }).catch(err => {
+        console.error(err)
+        sm({ chat_id, text: fid + ' Stats Failed：' + err.message })
+      }).finally(() => {
         delete counting[fid]
       })
     } else if (action === 'clear_button') {
@@ -91,50 +102,55 @@ router.post('/api/gdurl/tgbot', async ctx => {
     v = String(v).toLowerCase()
     return v === username || v === user_id
   })) {
-    chat_id && sm({ chat_id, text: '您的用户名或ID不在机器人的白名单中，如果是您配置的机器人，请先到config.js中配置自己的username' })
-    return console.warn('收到非白名单用户的请求')
+    chat_id && sm({ chat_id, text: 'You are not supposed to Message me you idiot, go back to the hole you came from' })
+    return console.warn('Received a request from a non-whitelisted user')
   }
 
   const fid = extract_fid(text) || extract_from_text(text) || extract_from_text(message_str)
-  const no_fid_commands = ['/task', '/help', '/bm']
+  const no_fid_commands = ['/task', '/help', '/bm', '/reload']
   if (!no_fid_commands.some(cmd => text.startsWith(cmd)) && !validate_fid(fid)) {
-    return sm({ chat_id, text: '未识别出分享ID' })
+    return sm({ chat_id, text: 'Folder ID is invalid or not accessible' })
   }
   if (text.startsWith('/help')) return send_help(chat_id)
-  if (text.startsWith('/bm')) {
+  if (text.startsWith('/reload')) {
+    if (!is_pm2()) return sm({ chat_id, text: 'Process is not a pm2 daemon，Do not restart' })
+    sm({ chat_id, text: 'Restart' }).then(() => process.exit())
+  } else if (text.startsWith('/bm')) {
     const [cmd, action, alias, target] = text.split(' ').map(v => v.trim()).filter(v => v)
     if (!action) return send_all_bookmarks(chat_id)
     if (action === 'set') {
-      if (!alias || !target) return sm({ chat_id, text: '别名和目标ID不能为空' })
-      if (alias.length > 24) return sm({ chat_id, text: '别名不要超过24个英文字符长度' })
-      if (!validate_fid(target)) return sm({ chat_id, text: '目标ID格式有误' })
+      if (!alias || !target) return sm({ chat_id, text: 'Name and Destination FolderID cannot be empty ' })
+      if (alias.length > 24) return sm({ chat_id, text: 'Name Shouldnt be more than 24 Letters in Length' })
+      if (!validate_fid(target)) return sm({ chat_id, text: 'Incorrect Destination FolderID' })
       set_bookmark({ chat_id, alias, target })
     } else if (action === 'unset') {
-      if (!alias) return sm({ chat_id, text: '别名不能为空' })
+      if (!alias) return sm({ chat_id, text: 'Name Cannot be empty' })
       unset_bookmark({ chat_id, alias })
     } else {
       send_bm_help(chat_id)
     }
   } else if (text.startsWith('/count')) {
-    if (counting[fid]) return sm({ chat_id, text: fid + ' 正在统计，请稍等片刻' })
+    if (counting[fid]) return sm({ chat_id, text: fid + ' Counting, please wait a moment' })
     try {
       counting[fid] = true
       const update = text.endsWith(' -u')
       await send_count({ fid, chat_id, update })
     } catch (err) {
       console.error(err)
-      sm({ chat_id, text: fid + ' 统计失败：' + err.message })
+      sm({ chat_id, text: fid + ' Stats Failed：' + err.message })
     } finally {
       delete counting[fid]
     }
   } else if (text.startsWith('/copy')) {
     let target = text.replace('/copy', '').replace(' -u', '').trim().split(' ').map(v => v.trim()).filter(v => v)[1]
     target = get_target_by_alias(target) || target
-    if (target && !validate_fid(target)) return sm({ chat_id, text: `目标ID ${target} 格式不正确` })
+    if (target && !validate_fid(target)) return sm({ chat_id, text: `Destination FolderID ${target} is Invalid` })
+    if (COPYING_FIDS[fid + target]) return sm({ chat_id, text: 'Processing copy command with the same source and destination' })
+    COPYING_FIDS[fid + target] = true
     const update = text.endsWith(' -u')
     tg_copy({ fid, target, chat_id, update }).then(task_id => {
-      task_id && sm({ chat_id, text: `开始复制，任务ID: ${task_id} 可输入 /task ${task_id} 查询进度` })
-    })
+      is_int(task_id) && sm({ chat_id, text: `Clone Started For Task ID: ${task_id}\nType /task ${task_id} to check the progress` })
+    }).finally(() => COPYING_FIDS[fid + target] = false)
   } else if (text.startsWith('/task')) {
     let task_id = text.replace('/task', '').trim()
     if (task_id === 'all') {
@@ -152,14 +168,14 @@ router.post('/api/gdurl/tgbot', async ctx => {
     task_id = parseInt(task_id)
     if (!task_id) {
       const running_tasks = db.prepare('select id from task where status=?').all('copying')
-      if (!running_tasks.length) return sm({ chat_id, text: '当前暂无运行中的任务' })
+      if (!running_tasks.length) return sm({ chat_id, text: 'There are currently no running tasks' })
       return running_tasks.forEach(v => send_task_info({ chat_id, task_id: v.id }).catch(console.error))
     }
     send_task_info({ task_id, chat_id }).catch(console.error)
   } else if (message_str.includes('drive.google.com/') || validate_fid(text)) {
     return send_choice({ fid: fid || text, chat_id })
   } else {
-    sm({ chat_id, text: '暂不支持此命令' })
+    sm({ chat_id, text: 'This command is not currently supported' })
   }
 })
 
